@@ -115,3 +115,16 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# Sign-in sessions (see apps/users/sessions.py).
+# ABSOLUTE_LIFETIME must equal SIMPLE_JWT's REFRESH_TOKEN_LIFETIME: a session
+# ends that long after sign-in however often it is used. INACTIVITY_WINDOW
+# ends a session that has not been renewed for that long.
+AUTH_SESSION = {
+    'ABSOLUTE_LIFETIME': SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'],
+    'INACTIVITY_WINDOW': timedelta(hours=24),
+    'COOKIE_NAME': 'refresh_token',
+    'COOKIE_PATH': '/api/auth/',
+    'COOKIE_SAMESITE': os.environ.get('AUTH_COOKIE_SAMESITE', 'Lax'),
+    'COOKIE_SECURE': False,
+}

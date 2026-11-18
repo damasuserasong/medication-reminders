@@ -28,10 +28,9 @@ export interface ApiUser {
   last_name?: string
 }
 
-/** The token pair login and register return. */
-export interface TokenPair {
+/** What login, register and refresh return. The refresh token is an httpOnly cookie. */
+export interface AccessToken {
   access: string
-  refresh: string
 }
 
 export interface AuthAdapter {

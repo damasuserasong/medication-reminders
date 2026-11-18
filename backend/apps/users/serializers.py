@@ -56,10 +56,9 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class TokenSerializer(serializers.Serializer):
-    """Serializer for JWT token responses."""
+    """Serializer for the access token response. The refresh token travels in a cookie."""
 
     access = serializers.CharField()
-    refresh = serializers.CharField()
 
 
 class ChangePasswordSerializer(serializers.Serializer):
