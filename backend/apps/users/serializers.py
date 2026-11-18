@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import IntegrityError, transaction
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from .models import CustomUser
@@ -45,6 +46,18 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ['email', 'first_name', 'last_name', 'password', 'password_confirm']
+        extra_kwargs = {
+            # Registration asks for an email and a password; a name is optional.
+            'first_name': {'required': False, 'allow_blank': True},
+            # Uniqueness is checked in validate_email, which ignores case.
+            'email': {'validators': []},
+        }
+
+    def validate_email(self, value):
+        value = CustomUser.objects.normalize_email(value).lower()
+        if CustomUser.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('That email is already registered.')
+        return value
 
     def validate(self, attrs):
         if attrs['password'] != attrs.pop('password_confirm'):
@@ -52,7 +65,15 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        return CustomUser.objects.create_user(**validated_data)
+        # Two requests can pass validation together; the database constraint
+        # decides, and the loser gets the same message as any duplicate.
+        try:
+            with transaction.atomic():
+                return CustomUser.objects.create_user(**validated_data)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {'email': ['That email is already registered.']}
+            )
 
 
 class TokenSerializer(serializers.Serializer):

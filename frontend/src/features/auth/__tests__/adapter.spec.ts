@@ -75,6 +75,76 @@ describe('auth adapter session restore', () => {
   })
 })
 
+describe('auth adapter sign up', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function requestBody(fetchMock: ReturnType<typeof mockFetch>, path: string) {
+    const call = fetchMock.mock.calls.find(([url]) => String(url).includes(path))
+    return JSON.parse(String(call?.[1]?.body))
+  }
+
+  it('registers with only an email and a password', async () => {
+    const fetchMock = mockFetch({
+      '/api/auth/register/': [jsonResponse(201, { access: 'access-1' })],
+      '/api/auth/me/': [jsonResponse(200, { ...me, first_name: '' })],
+    })
+
+    const { adapter } = await load(false)
+    const result = await adapter.signUpWithEmail('ada@example.com', 'Password123!')
+
+    expect(result.success).toBe(true)
+    expect(requestBody(fetchMock, '/register/')).toEqual({
+      email: 'ada@example.com',
+      password: 'Password123!',
+      password_confirm: 'Password123!',
+    })
+  })
+
+  it('sends the name when one is given', async () => {
+    const fetchMock = mockFetch({
+      '/api/auth/register/': [jsonResponse(201, { access: 'access-1' })],
+      '/api/auth/me/': [jsonResponse(200, me)],
+    })
+
+    const { adapter } = await load(false)
+    await adapter.signUpWithEmail('ada@example.com', 'Password123!', 'Ada')
+
+    expect(requestBody(fetchMock, '/register/')).toMatchObject({ first_name: 'Ada' })
+  })
+
+  it('signs the new person in and tells listeners who they are', async () => {
+    mockFetch({
+      '/api/auth/register/': [jsonResponse(201, { access: 'access-1' })],
+      '/api/auth/me/': [jsonResponse(200, me)],
+    })
+
+    const { storage, adapter } = await load(false)
+    const heard: unknown[] = []
+    adapter.onAuthStateChanged((user) => heard.push(user))
+    await adapter.signUpWithEmail('ada@example.com', 'Password123!', 'Ada')
+
+    expect(storage.getAccessToken()).toBe('access-1')
+    expect(heard.at(-1)).toMatchObject({ email: 'ada@example.com' })
+  })
+
+  it('reports a duplicate address without signing anyone in', async () => {
+    mockFetch({
+      '/api/auth/register/': [
+        jsonResponse(400, { email: ['That email is already registered.'] }),
+      ],
+    })
+
+    const { storage, adapter } = await load(false)
+    const result = await adapter.signUpWithEmail('ada@example.com', 'Password123!')
+
+    expect(result.success).toBe(false)
+    expect(result.error?.message).toContain('That email is already registered.')
+    expect(storage.getAccessToken()).toBeNull()
+  })
+})
+
 describe('auth adapter sign in and out', () => {
   afterEach(() => {
     vi.unstubAllGlobals()

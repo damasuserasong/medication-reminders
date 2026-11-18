@@ -11,7 +11,11 @@ export default function DashboardPage() {
     <Stack gap="8">
       <PageHeader
         title="Dashboard"
-        description={`Welcome back, ${displayName(user, 'there')}.`}
+        description={
+          user?.displayName
+            ? `Welcome back, ${displayName(user, 'there')}. You are signed in as ${user.email}.`
+            : `Welcome back. You are signed in as ${user?.email ?? 'your account'}.`
+        }
       />
       <Separator />
       <StackOverview />

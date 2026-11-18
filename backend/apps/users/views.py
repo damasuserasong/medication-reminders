@@ -7,6 +7,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from drf_spectacular.utils import extend_schema
 
 from . import sessions
+from .permissions import TrustedOrigin
 from .serializers import (
     LoginSerializer,
     RegisterSerializer,
@@ -35,7 +36,7 @@ class AuthViewSet(ViewSet):
         description='Authenticate with email and password. Returns an access token and sets the refresh-token cookie.',
         tags=['auth'],
     )
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny, TrustedOrigin])
     def login(self, request):
         serializer = LoginSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
@@ -47,7 +48,7 @@ class AuthViewSet(ViewSet):
         description='Create a new user account and sign it in. Returns an access token and sets the refresh-token cookie.',
         tags=['auth'],
     )
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny, TrustedOrigin])
     def register(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -136,7 +137,7 @@ class AuthViewSet(ViewSet):
         description='Sign out this device: revokes its refresh token and clears the cookie. Other sessions are untouched.',
         tags=['auth'],
     )
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny, TrustedOrigin])
     def logout(self, request):
         raw_token = sessions.read_session_cookie(request)
         if raw_token:
@@ -151,7 +152,7 @@ class AuthViewSet(ViewSet):
         description='Renew the session from the refresh-token cookie. Returns a new access token and replaces the cookie.',
         tags=['auth'],
     )
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny, TrustedOrigin])
     def refresh(self, request):
         raw_token = sessions.read_session_cookie(request)
         try:

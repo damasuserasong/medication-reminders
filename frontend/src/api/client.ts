@@ -67,12 +67,25 @@ async function requestNewTokens(): Promise<boolean> {
   }
 }
 
-/** Renew the session from the refresh cookie. Resolves false if that fails. */
+/**
+ * Renew the session from the refresh cookie. Resolves false if that fails.
+ *
+ * Tabs share one cookie but not one in-flight request, and every renewal
+ * replaces the token, so two tabs renewing at once would present the same
+ * token and one would be signed out. A browser-wide lock makes them take
+ * turns: the second tab then sends the cookie the first one just received.
+ */
 export function refreshAccessToken(): Promise<boolean> {
-  refreshPromise ??= requestNewTokens().finally(() => {
+  refreshPromise ??= withRefreshLock(requestNewTokens).finally(() => {
     refreshPromise = null
   })
   return refreshPromise
+}
+
+function withRefreshLock(task: () => Promise<boolean>): Promise<boolean> {
+  return typeof navigator !== 'undefined' && navigator.locks
+    ? navigator.locks.request('auth-refresh', task)
+    : task()
 }
 
 // 401 interceptor — try to renew the session; sign out if that fails

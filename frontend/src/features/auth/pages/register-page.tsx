@@ -25,7 +25,7 @@ export default function RegisterPage() {
     e.preventDefault()
     const result = await register(email, password, displayName)
     if (result.success) {
-      navigate(Path.Home, { replace: true })
+      navigate(Path.Dashboard, { replace: true })
     }
   }
 
@@ -46,7 +46,9 @@ export default function RegisterPage() {
       <form onSubmit={handleSubmit}>
         <Stack gap="4">
           <Field.Root>
-            <Field.Label>Name</Field.Label>
+            <Field.Label>
+              Name <Text as="span" color="fg.muted" fontWeight="normal">(optional)</Text>
+            </Field.Label>
             <Input
               autoComplete="name"
               value={displayName}

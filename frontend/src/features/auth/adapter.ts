@@ -139,7 +139,7 @@ export function createAuthAdapter(): AuthAdapter {
             email,
             password,
             password_confirm: password,
-            first_name: displayName || '',
+            ...(displayName ? { first_name: displayName } : {}),
           }),
         })
 

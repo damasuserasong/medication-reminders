@@ -127,4 +127,12 @@ AUTH_SESSION = {
     'COOKIE_PATH': '/api/auth/',
     'COOKIE_SAMESITE': os.environ.get('AUTH_COOKIE_SAMESITE', 'Lax'),
     'COOKIE_SECURE': False,
+    # Pages allowed to start sign-in, sign-up, renew and sign-out requests.
+    'TRUSTED_ORIGINS': [
+        origin.strip()
+        for origin in os.environ.get(
+            'CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:3000'
+        ).split(',')
+        if origin.strip()
+    ],
 }

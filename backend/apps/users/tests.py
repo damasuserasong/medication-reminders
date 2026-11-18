@@ -175,7 +175,7 @@ class TestRegisterValidation:
         response = api_client.post(REGISTER_URL, registration_payload)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'already exists' in str(response.data['email'][0])
+        assert response.data['email'] == ['That email is already registered.']
 
     def test_short_password_states_the_minimum_length(
         self, api_client, registration_payload, db
@@ -329,3 +329,119 @@ class TestChangePasswordEndsOtherSessions:
         assert response.status_code == status.HTTP_200_OK
         assert phone.post(REFRESH_URL).status_code == status.HTTP_401_UNAUTHORIZED
         assert laptop.post(REFRESH_URL).status_code == status.HTTP_200_OK
+
+
+class TestRegisterNeedsOnlyEmailAndPassword:
+    def test_a_name_is_optional(self, api_client, test_password, db):
+        response = api_client.post(
+            REGISTER_URL,
+            {
+                'email': 'noname@example.com',
+                'password': test_password,
+                'password_confirm': test_password,
+            },
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_a_blank_name_is_accepted(self, api_client, test_password, db):
+        response = api_client.post(
+            REGISTER_URL,
+            {
+                'email': 'blank@example.com',
+                'first_name': '',
+                'password': test_password,
+                'password_confirm': test_password,
+            },
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+
+class TestEmailIsOneAccountWhateverTheCase:
+    @pytest.mark.parametrize(
+        'variant', ['TEST@example.com', 'test@EXAMPLE.COM', 'Test@Example.Com']
+    )
+    def test_a_differently_cased_duplicate_is_refused_not_a_500(
+        self, api_client, registration_payload, user, variant
+    ):
+        registration_payload['email'] = variant
+
+        response = api_client.post(REGISTER_URL, registration_payload)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['email'] == ['That email is already registered.']
+
+    def test_a_race_past_validation_is_still_a_clean_error(
+        self, api_client, registration_payload, user
+    ):
+        from apps.users.serializers import RegisterSerializer
+
+        registration_payload['email'] = user.email
+        with mock.patch.object(
+            RegisterSerializer, 'validate_email', side_effect=lambda value: value
+        ):
+            response = api_client.post(REGISTER_URL, registration_payload)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['email'] == ['That email is already registered.']
+
+    def test_the_address_is_stored_in_lower_case(
+        self, api_client, registration_payload, django_user_model, db
+    ):
+        registration_payload['email'] = 'Mixed.Case@Example.COM'
+
+        api_client.post(REGISTER_URL, registration_payload)
+
+        assert django_user_model.objects.get().email == 'mixed.case@example.com'
+
+    def test_sign_in_ignores_the_case_of_the_address(self, api_client, user, test_password):
+        response = api_client.post(
+            LOGIN_URL, {'email': user.email.upper(), 'password': test_password}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+
+class TestOriginCheck:
+    EVIL = {'HTTP_ORIGIN': 'https://evil.example'}
+    OWN = {'HTTP_ORIGIN': 'http://localhost:5173'}
+
+    def test_login_from_another_site_is_refused(self, api_client, user, test_password):
+        response = api_client.post(
+            LOGIN_URL, {'email': user.email, 'password': test_password}, **self.EVIL
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert COOKIE_NAME not in response.cookies
+
+    def test_register_from_another_site_is_refused(
+        self, api_client, registration_payload, django_user_model, db
+    ):
+        response = api_client.post(REGISTER_URL, registration_payload, **self.EVIL)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert not django_user_model.objects.filter(email='new@example.com').exists()
+
+    def test_refresh_and_logout_from_another_site_are_refused(self, signed_in):
+        assert signed_in.post(REFRESH_URL, **self.EVIL).status_code == status.HTTP_403_FORBIDDEN
+        assert signed_in.post(LOGOUT_URL, **self.EVIL).status_code == status.HTTP_403_FORBIDDEN
+        assert signed_in.post(REFRESH_URL).status_code == status.HTTP_200_OK
+
+    def test_a_referer_from_another_site_is_refused_when_there_is_no_origin(
+        self, api_client, user, test_password
+    ):
+        response = api_client.post(
+            LOGIN_URL,
+            {'email': user.email, 'password': test_password},
+            HTTP_REFERER='https://evil.example/page',
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_the_configured_front_end_is_allowed(self, api_client, user, test_password):
+        response = api_client.post(
+            LOGIN_URL, {'email': user.email, 'password': test_password}, **self.OWN
+        )
+
+        assert response.status_code == status.HTTP_200_OK
