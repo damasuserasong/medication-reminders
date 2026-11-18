@@ -29,3 +29,9 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+
+# The refresh-token cookie. If the app and the API sit on different sites,
+# set AUTH_COOKIE_SAMESITE=None (it requires Secure, which is on here).
+from .base import AUTH_SESSION  # noqa: E402
+
+AUTH_SESSION = {**AUTH_SESSION, 'COOKIE_SECURE': True}
