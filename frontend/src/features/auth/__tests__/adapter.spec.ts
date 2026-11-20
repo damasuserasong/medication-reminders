@@ -1,4 +1,10 @@
-const me = { id: 1, email: 'ada@example.com', first_name: 'Ada', last_name: '' }
+const me = {
+  id: 1,
+  email: 'ada@example.com',
+  first_name: 'Ada',
+  last_name: '',
+  timezone: 'Europe/London',
+}
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -25,8 +31,9 @@ async function load(signedInBefore: boolean) {
   localStorage.clear()
   if (signedInBefore) localStorage.setItem('auth.session', '1')
   const storage = await import('@/api/token-storage')
+  const { queryClient } = await import('@/api/query-client')
   const { createAuthAdapter } = await import('../adapter')
-  return { storage, adapter: createAuthAdapter() }
+  return { storage, queryClient, adapter: createAuthAdapter() }
 }
 
 function firstAuthState(adapter: { onAuthStateChanged: (cb: (u: unknown) => void) => unknown }) {
@@ -38,7 +45,7 @@ describe('auth adapter session restore', () => {
     vi.unstubAllGlobals()
   })
 
-  it('restores the user from the refresh cookie after a reload', async () => {
+  it('restores the user and time zone from the refresh cookie after a reload', async () => {
     const fetchMock = mockFetch({
       '/api/auth/refresh/': [jsonResponse(200, { access: 'access-2' })],
       '/api/auth/me/': [jsonResponse(200, me)],
@@ -47,7 +54,11 @@ describe('auth adapter session restore', () => {
     const { storage, adapter } = await load(true)
     const user = await firstAuthState(adapter)
 
-    expect(user).toMatchObject({ email: 'ada@example.com', displayName: 'Ada' })
+    expect(user).toMatchObject({
+      email: 'ada@example.com',
+      displayName: 'Ada',
+      timezone: 'Europe/London',
+    })
     expect(storage.getAccessToken()).toBe('access-2')
     const refreshCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/refresh/'))
     expect(refreshCall?.[1]).toMatchObject({ method: 'POST', credentials: 'include' })
@@ -85,20 +96,25 @@ describe('auth adapter sign up', () => {
     return JSON.parse(String(call?.[1]?.body))
   }
 
-  it('registers with only an email and a password', async () => {
+  it('registers with email, password, and time zone (name optional)', async () => {
     const fetchMock = mockFetch({
       '/api/auth/register/': [jsonResponse(201, { access: 'access-1' })],
       '/api/auth/me/': [jsonResponse(200, { ...me, first_name: '' })],
     })
 
     const { adapter } = await load(false)
-    const result = await adapter.signUpWithEmail('ada@example.com', 'Password123!')
+    const result = await adapter.signUpWithEmail(
+      'ada@example.com',
+      'Password123!',
+      'Europe/London'
+    )
 
     expect(result.success).toBe(true)
     expect(requestBody(fetchMock, '/register/')).toEqual({
       email: 'ada@example.com',
       password: 'Password123!',
       password_confirm: 'Password123!',
+      timezone: 'Europe/London',
     })
   })
 
@@ -109,9 +125,12 @@ describe('auth adapter sign up', () => {
     })
 
     const { adapter } = await load(false)
-    await adapter.signUpWithEmail('ada@example.com', 'Password123!', 'Ada')
+    await adapter.signUpWithEmail('ada@example.com', 'Password123!', 'Europe/London', 'Ada')
 
-    expect(requestBody(fetchMock, '/register/')).toMatchObject({ first_name: 'Ada' })
+    expect(requestBody(fetchMock, '/register/')).toMatchObject({
+      first_name: 'Ada',
+      timezone: 'Europe/London',
+    })
   })
 
   it('signs the new person in and tells listeners who they are', async () => {
@@ -123,10 +142,13 @@ describe('auth adapter sign up', () => {
     const { storage, adapter } = await load(false)
     const heard: unknown[] = []
     adapter.onAuthStateChanged((user) => heard.push(user))
-    await adapter.signUpWithEmail('ada@example.com', 'Password123!', 'Ada')
+    await adapter.signUpWithEmail('ada@example.com', 'Password123!', 'Europe/London', 'Ada')
 
     expect(storage.getAccessToken()).toBe('access-1')
-    expect(heard.at(-1)).toMatchObject({ email: 'ada@example.com' })
+    expect(heard.at(-1)).toMatchObject({
+      email: 'ada@example.com',
+      timezone: 'Europe/London',
+    })
   })
 
   it('reports a duplicate address without signing anyone in', async () => {
@@ -137,7 +159,11 @@ describe('auth adapter sign up', () => {
     })
 
     const { storage, adapter } = await load(false)
-    const result = await adapter.signUpWithEmail('ada@example.com', 'Password123!')
+    const result = await adapter.signUpWithEmail(
+      'ada@example.com',
+      'Password123!',
+      'Europe/London'
+    )
 
     expect(result.success).toBe(false)
     expect(result.error?.message).toContain('That email is already registered.')
@@ -145,7 +171,7 @@ describe('auth adapter sign up', () => {
   })
 })
 
-describe('auth adapter sign in and out', () => {
+describe('auth adapter profile and sign out', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
@@ -165,6 +191,24 @@ describe('auth adapter sign in and out', () => {
     expect(localStorage.getItem('auth.session')).toBe('1')
   })
 
+  it('updates the user time zone and notifies listeners', async () => {
+    mockFetch({
+      '/api/auth/login/': [jsonResponse(200, { access: 'access-1' })],
+      '/api/auth/me/': [
+        jsonResponse(200, me),
+        jsonResponse(200, { ...me, timezone: 'America/New_York' }),
+      ],
+    })
+
+    const { adapter } = await load(false)
+    await adapter.signInWithEmail('ada@example.com', 'Password123!')
+    const result = await adapter.updateProfile({ timezone: 'America/New_York' })
+
+    expect(result.success).toBe(true)
+    expect(result.user?.timezone).toBe('America/New_York')
+    expect(adapter.getCurrentUser()?.timezone).toBe('America/New_York')
+  })
+
   it('shows the server message when sign-in fails', async () => {
     mockFetch({
       '/api/auth/login/': [
@@ -179,15 +223,17 @@ describe('auth adapter sign in and out', () => {
     expect(result.error?.message).toContain('Invalid email or password.')
   })
 
-  it('signs out by asking the server to end this device’s session', async () => {
+  it('signs out by ending this device’s session and clearing cached query data', async () => {
     const fetchMock = mockFetch({
       '/api/auth/login/': [jsonResponse(200, { access: 'access-1' })],
       '/api/auth/me/': [jsonResponse(200, me)],
       '/api/auth/logout/': [jsonResponse(200, { detail: 'ok' })],
     })
 
-    const { storage, adapter } = await load(false)
+    const { storage, queryClient, adapter } = await load(false)
     await adapter.signInWithEmail('ada@example.com', 'Password123!')
+    queryClient.setQueryData(['courses'], [{ id: '1', medicine_name: 'Amoxicillin' }])
+
     await adapter.signOut()
 
     const logoutCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/logout/'))
@@ -195,5 +241,6 @@ describe('auth adapter sign in and out', () => {
     expect(storage.getAccessToken()).toBeNull()
     expect(storage.hasSessionHint()).toBe(false)
     expect(adapter.getCurrentUser()).toBeNull()
+    expect(queryClient.getQueryData(['courses'])).toBeUndefined()
   })
 })

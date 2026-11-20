@@ -1,7 +1,10 @@
 export interface AuthUser {
   id: string
   email: string
+  firstName: string
+  lastName: string
   displayName: string | null
+  timezone: string
   photoURL: string | null
   emailVerified: boolean
   providerId: string
@@ -26,6 +29,14 @@ export interface ApiUser {
   email: string
   first_name?: string
   last_name?: string
+  timezone: string
+}
+
+/** Fields editable on `/api/auth/me/`. */
+export interface ProfileUpdate {
+  first_name?: string
+  last_name?: string
+  timezone?: string
 }
 
 /** What login, register and refresh return. The refresh token is an httpOnly cookie. */
@@ -35,7 +46,13 @@ export interface AccessToken {
 
 export interface AuthAdapter {
   signInWithEmail(email: string, password: string): Promise<AuthResult>
-  signUpWithEmail(email: string, password: string, displayName?: string): Promise<AuthResult>
+  signUpWithEmail(
+    email: string,
+    password: string,
+    timezone: string,
+    displayName?: string
+  ): Promise<AuthResult>
+  updateProfile(patch: ProfileUpdate): Promise<AuthResult>
   signInWithSocial(provider: SocialProvider): Promise<AuthResult>
   sendPasswordResetEmail(email: string): Promise<{ success: boolean; error?: AuthError }>
   confirmPasswordReset(code: string, newPassword: string): Promise<{ success: boolean; error?: AuthError }>

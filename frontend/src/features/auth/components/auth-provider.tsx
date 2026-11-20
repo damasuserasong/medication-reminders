@@ -10,14 +10,20 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { createAuthAdapter } from '../adapter'
-import type { AuthUser, AuthError, AuthResult } from '../types'
+import type { AuthUser, AuthError, AuthResult, ProfileUpdate } from '../types'
 
 interface AuthContextValue {
   user: AuthUser | null
   loading: boolean
   error: AuthError | null
   signInWithEmail: (email: string, password: string) => Promise<AuthResult>
-  signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<AuthResult>
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    timezone: string,
+    displayName?: string
+  ) => Promise<AuthResult>
+  updateProfile: (patch: ProfileUpdate) => Promise<AuthResult>
   signOut: () => Promise<void>
   sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; error?: AuthError }>
   confirmPasswordReset: (code: string, newPassword: string) => Promise<{ success: boolean; error?: AuthError }>
@@ -53,9 +59,21 @@ export function AuthProvider({ children }: Props) {
     return result
   }, [])
 
-  const signUpWithEmail = useCallback(async (email: string, password: string, displayName?: string) => {
+  const signUpWithEmail = useCallback(
+    async (email: string, password: string, timezone: string, displayName?: string) => {
+      setError(null)
+      const result = await adapter.signUpWithEmail(email, password, timezone, displayName)
+      if (!result.success && result.error) {
+        setError(result.error)
+      }
+      return result
+    },
+    []
+  )
+
+  const updateProfile = useCallback(async (patch: ProfileUpdate) => {
     setError(null)
-    const result = await adapter.signUpWithEmail(email, password, displayName)
+    const result = await adapter.updateProfile(patch)
     if (!result.success && result.error) {
       setError(result.error)
     }
@@ -93,6 +111,7 @@ export function AuthProvider({ children }: Props) {
         error,
         signInWithEmail,
         signUpWithEmail,
+        updateProfile,
         signOut,
         sendPasswordResetEmail,
         confirmPasswordReset,

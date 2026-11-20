@@ -30,6 +30,7 @@ def user(db, django_user_model):
         email='test@example.com',
         password=TEST_PASSWORD,
         first_name='Test',
+        timezone='Europe/London',
     )
 
 
@@ -40,6 +41,7 @@ def other_user(db, django_user_model):
         email='other@example.com',
         password=TEST_PASSWORD,
         first_name='Other',
+        timezone='America/New_York',
     )
 
 

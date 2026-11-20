@@ -9,9 +9,9 @@ export function UserMenu() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  const handleLogout = () => {
-    logout()
-    navigate(Path.Login)
+  const handleLogout = async () => {
+    await logout()
+    navigate(Path.Login, { replace: true })
   }
 
   return (
@@ -33,13 +33,13 @@ export function UserMenu() {
               </Text>
             </Box>
             <Menu.Separator />
-            <Menu.Item value="profile">
+            <Menu.Item value="profile" onClick={() => navigate(Path.Account)}>
               <User size={16} />
-              Profile
+              Account & time zone
             </Menu.Item>
-            <Menu.Item value="settings">
+            <Menu.Item value="settings" onClick={() => navigate(Path.Dashboard)}>
               <Settings size={16} />
-              Settings
+              Medicine courses
             </Menu.Item>
             <Menu.Separator />
             <Menu.Item value="logout" onClick={handleLogout}>

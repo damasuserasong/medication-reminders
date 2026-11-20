@@ -32,6 +32,7 @@ def registration_payload(test_password):
     return {
         'email': 'new@example.com',
         'first_name': 'New',
+        'timezone': 'Europe/London',
         'password': test_password,
         'password_confirm': test_password,
     }
@@ -337,6 +338,7 @@ class TestRegisterNeedsOnlyEmailAndPassword:
             REGISTER_URL,
             {
                 'email': 'noname@example.com',
+                'timezone': 'Europe/London',
                 'password': test_password,
                 'password_confirm': test_password,
             },
@@ -350,6 +352,7 @@ class TestRegisterNeedsOnlyEmailAndPassword:
             {
                 'email': 'blank@example.com',
                 'first_name': '',
+                'timezone': 'Europe/London',
                 'password': test_password,
                 'password_confirm': test_password,
             },
@@ -445,3 +448,70 @@ class TestOriginCheck:
         )
 
         assert response.status_code == status.HTTP_200_OK
+
+
+class TestTimezoneOnAccount:
+    def test_register_saves_valid_iana_timezone(
+        self, api_client, registration_payload, django_user_model, db
+    ):
+        registration_payload['timezone'] = 'Africa/Lagos'
+
+        response = api_client.post(REGISTER_URL, registration_payload)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert django_user_model.objects.get(email='new@example.com').timezone == 'Africa/Lagos'
+
+    @pytest.mark.parametrize('bad_tz', ['', '   ', 'Mars/Olympus', '+01:00', 'UTC+1'])
+    def test_register_refuses_empty_or_invalid_timezone(
+        self, api_client, registration_payload, db, bad_tz
+    ):
+        registration_payload['timezone'] = bad_tz
+
+        response = api_client.post(REGISTER_URL, registration_payload)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'timezone' in response.data
+
+    def test_register_refuses_missing_timezone(self, api_client, registration_payload, db):
+        del registration_payload['timezone']
+
+        response = api_client.post(REGISTER_URL, registration_payload)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'timezone' in response.data
+
+    def test_me_returns_and_updates_timezone(self, auth_client, user):
+        get_resp = auth_client.get(ME_URL)
+        assert get_resp.status_code == status.HTTP_200_OK
+        assert get_resp.data['timezone'] == 'Europe/London'
+
+        patch_resp = auth_client.patch(ME_URL, {'timezone': 'America/New_York'})
+        assert patch_resp.status_code == status.HTTP_200_OK
+        assert patch_resp.data['timezone'] == 'America/New_York'
+        user.refresh_from_db()
+        assert user.timezone == 'America/New_York'
+
+    @pytest.mark.parametrize('bad_tz', ['', 'Not/A_Place', '+02:00'])
+    def test_me_refuses_empty_or_invalid_timezone(self, auth_client, user, bad_tz):
+        response = auth_client.patch(ME_URL, {'timezone': bad_tz})
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'timezone' in response.data
+        user.refresh_from_db()
+        assert user.timezone == 'Europe/London'
+
+
+class TestNoStoreCacheHeaders:
+    def test_authenticated_me_response_sets_no_store(self, auth_client):
+        response = auth_client.get(ME_URL)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response['Cache-Control'] == 'no-store'
+
+    def test_login_response_sets_no_store(self, api_client, user, test_password):
+        response = api_client.post(
+            LOGIN_URL, {'email': user.email, 'password': test_password}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response['Cache-Control'] == 'no-store'

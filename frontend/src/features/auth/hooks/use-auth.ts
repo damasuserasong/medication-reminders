@@ -19,6 +19,7 @@ export function useAuth() {
     error: auth.error,
     login: auth.signInWithEmail,
     register: auth.signUpWithEmail,
+    updateProfile: auth.updateProfile,
     logout: auth.signOut,
     sendPasswordResetEmail: auth.sendPasswordResetEmail,
     confirmPasswordReset: auth.confirmPasswordReset,

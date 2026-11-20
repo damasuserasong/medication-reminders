@@ -22,5 +22,6 @@ urlpatterns = [
     path('api/auth/', include('apps.users.urls')),
 
     # Resource endpoints (auto-registered by blacksmith make:resource)
+    path('api/courses/', include('apps.courses.urls')),
     # blacksmith:urls
 ]

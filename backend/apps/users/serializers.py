@@ -2,16 +2,26 @@ from rest_framework import serializers
 from django.db import IntegrityError, transaction
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
-from .models import CustomUser
+from .models import CustomUser, validate_timezone
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user profile data."""
 
+    timezone = serializers.CharField(
+        max_length=64,
+        required=True,
+        allow_blank=False,
+        validators=[validate_timezone],
+    )
+
     class Meta:
         model = CustomUser
-        fields = ['id', 'email', 'first_name', 'last_name', 'date_joined']
+        fields = ['id', 'email', 'first_name', 'last_name', 'timezone', 'date_joined']
         read_only_fields = ['id', 'email', 'date_joined']
+        extra_kwargs = {
+            'first_name': {'required': False, 'allow_blank': True},
+        }
 
 
 class LoginSerializer(serializers.Serializer):
@@ -42,12 +52,25 @@ class RegisterSerializer(serializers.ModelSerializer):
         validators=[validate_password],
     )
     password_confirm = serializers.CharField(write_only=True)
+    timezone = serializers.CharField(
+        max_length=64,
+        required=True,
+        allow_blank=False,
+        validators=[validate_timezone],
+    )
 
     class Meta:
         model = CustomUser
-        fields = ['email', 'first_name', 'last_name', 'password', 'password_confirm']
+        fields = [
+            'email',
+            'first_name',
+            'last_name',
+            'timezone',
+            'password',
+            'password_confirm',
+        ]
         extra_kwargs = {
-            # Registration asks for an email and a password; a name is optional.
+            # Registration asks for an email, password, and time zone; a name is optional.
             'first_name': {'required': False, 'allow_blank': True},
             # Uniqueness is checked in validate_email, which ignores case.
             'email': {'validators': []},

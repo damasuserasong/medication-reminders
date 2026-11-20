@@ -25,6 +25,12 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 }
 
+// PointerEvent (Zag/Chakra press handlers instantiate PointerEvent on blur)
+if (typeof globalThis.PointerEvent === 'undefined') {
+  ;(globalThis as unknown as { PointerEvent: typeof MouseEvent }).PointerEvent =
+    MouseEvent
+}
+
 // jsdom can't parse the CSS cascade layers the UI kit emits; the styles
 // still apply, so drop that one noisy error and keep every other one.
 const consoleError = console.error
